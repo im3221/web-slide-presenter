@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>세계 날씨 비교</title>
+<meta name="description" content="세계 주요 기상기관 예보 모델을 한눈에 비교하고 종합 예측을 보여주는 웹앱">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface-2: #eef2f8;
+  --text: #172033;
+  --muted: #5b6579;
+  --line: #dde3ec;
+  --accent: #2563eb;
+  --accent-soft: #dbe7ff;
+  --good: #15803d;
+  --good-soft: #dcfce7;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --bad: #b91c1c;
+  --bad-soft: #fee2e2;
+  --rain: #0284c7;
+  --consensus: #111827;
+  --shadow: 0 1px 2px rgba(16,24,40,.05), 0 4px 16px rgba(16,24,40,.06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --surface: #161b24;
+    --surface-2: #1e2531;
+    --text: #e7ecf3;
+    --muted: #9aa5b8;
+    --line: #2a3342;
+    --accent: #6c9cff;
+    --accent-soft: #1d2a47;
+    --good: #4ade80;
+    --good-soft: #14301f;
+    --warn: #fbbf24;
+    --warn-soft: #3a2c0c;
+    --bad: #f87171;
+    --bad-soft: #3b1515;
+    --rain: #38bdf8;
+    --consensus: #f8fafc;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b24;
+  --surface-2: #1e2531;
+  --text: #e7ecf3;
+  --muted: #9aa5b8;
+  --line: #2a3342;
+  --accent: #6c9cff;
+  --accent-soft: #1d2a47;
+  --good: #4ade80;
+  --good-soft: #14301f;
+  --warn: #fbbf24;
+  --warn-soft: #3a2c0c;
+  --bad: #f87171;
+  --bad-soft: #3b1515;
+  --rain: #38bdf8;
+  --consensus: #f8fafc;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+header.top h1 { margin: 0; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; }
+header.top p { margin: 4px 0 0; color: var(--muted); font-size: .95rem; }
+.theme-btn { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 10px; padding: 8px 12px; cursor: pointer; font: inherit; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
+.card h2 { margin: 0 0 4px; font-size: 1.15rem; font-weight: 700; }
+.card .sub { margin: 0 0 14px; color: var(--muted); font-size: .88rem; }
+
+/* 검색 */
+.search-row { display: flex; gap: 8px; flex-wrap: wrap; position: relative; }
+.search-row input { flex: 1 1 240px; min-width: 0; padding: 11px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; }
+.search-row input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn { padding: 10px 16px; border-radius: 10px; border: 1px solid transparent; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn.ghost { background: var(--surface-2); color: var(--text); border-color: var(--line); }
+.btn:disabled { opacity: .6; cursor: default; }
+.results { position: absolute; top: 48px; left: 0; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; display: none; }
+.results.open { display: block; }
+.results button { display: block; width: 100%; text-align: left; padding: 10px 14px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.results button:last-child { border-bottom: 0; }
+.results button:hover, .results button:focus { background: var(--surface-2); }
+.results small { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .88rem; cursor: pointer; }
+.chip:hover { border-color: var(--accent); }
+
+.loc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 6px 2px 14px; }
+.loc-head h2 { margin: 0; font-size: 1.5rem; font-weight: 800; }
+.loc-head .meta { color: var(--muted); font-size: .88rem; }
+.banner { padding: 10px 14px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: .9rem; margin-bottom: 14px; display: none; }
+.banner.show { display: block; }
+.loading { text-align: center; padding: 40px; color: var(--muted); }
+
+/* 종합 예측 */
+.hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; }
+.hero-main { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.big-emoji { font-size: 4.2rem; line-height: 1; }
+.now-temp { font-size: 3.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.now-desc { color: var(--muted); margin-top: 6px; }
+.stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.stat { background: var(--surface-2); border-radius: 12px; padding: 10px 14px; min-width: 96px; }
+.stat .k { font-size: .78rem; color: var(--muted); }
+.stat .v { font-size: 1.15rem; font-weight: 700; }
+.summary { margin-top: 16px; font-size: 1rem; }
+.advice { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
+.advice li { background: var(--surface-2); border-radius: 10px; padding: 8px 12px; font-size: .93rem; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+.badge.high { background: var(--good-soft); color: var(--good); }
+.badge.mid { background: var(--warn-soft); color: var(--warn); }
+.badge.low { background: var(--bad-soft); color: var(--bad); }
+.tomorrow { background: var(--surface-2); border-radius: 14px; padding: 16px; }
+.tomorrow h3 { margin: 0 0 8px; font-size: 1rem; }
+.model-now { display: grid; gap: 6px; margin-top: 4px; }
+.model-now .row { display: grid; grid-template-columns: 110px 1fr 52px; align-items: center; gap: 8px; font-size: .85rem; }
+.model-now .bar { height: 8px; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
+.model-now .bar span { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 4px; }
+.model-now .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* 주간 */
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.day { background: var(--surface-2); border-radius: 12px; padding: 12px 8px; text-align: center; }
+.day .d { font-weight: 700; font-size: .9rem; }
+.day .e { font-size: 1.9rem; margin: 4px 0; }
+.day .t { font-weight: 700; font-variant-numeric: tabular-nums; }
+.day .t .lo { color: var(--muted); font-weight: 500; }
+.day .r { color: var(--rain); font-size: .85rem; margin-top: 2px; }
+.day .c { margin-top: 6px; }
+
+/* 모델 선택 */
+.model-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.mt { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 6px 12px 6px 8px; cursor: pointer; font-size: .88rem; user-select: none; }
+.mt input { margin: 0; accent-color: var(--accent); }
+.mt .dot { width: 10px; height: 10px; border-radius: 50%; }
+.mt.off { opacity: .45; }
+.mt.na { opacity: .35; cursor: not-allowed; }
+
+/* 비교표 */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.cmp { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 820px; font-size: .88rem; }
+table.cmp th, table.cmp td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--line); }
+table.cmp thead th { font-weight: 700; color: var(--muted); font-size: .82rem; background: var(--surface); position: sticky; top: 0; }
+table.cmp th.model { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 150px; }
+table.cmp th.model .nm { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text); }
+table.cmp th.model .org { font-weight: 400; color: var(--muted); font-size: .75rem; }
+table.cmp td .e { font-size: 1.3rem; }
+table.cmp td .t { font-variant-numeric: tabular-nums; font-weight: 600; }
+table.cmp td .t .lo { color: var(--muted); font-weight: 400; }
+table.cmp td .p { color: var(--rain); font-size: .78rem; }
+table.cmp td.dev-hi { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+table.cmp td.dev-lo { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+table.cmp tr.cons th, table.cmp tr.cons td { background: var(--accent-soft); border-bottom: 0; }
+table.cmp tr.cons th.model { background: var(--accent-soft); }
+table.cmp tr.na td { color: var(--muted); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+
+/* 차트 */
+.chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface-2); color: var(--muted); padding: 6px 12px; font: inherit; font-size: .85rem; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; }
+.chart-box { position: relative; height: 340px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.hero > *, .grid2 > * { min-width: 0; }
+
+/* 분석 */
+.insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.insight { background: var(--surface-2); border-radius: 12px; padding: 14px; }
+.insight .k { font-size: .8rem; color: var(--muted); }
+.insight .v { font-weight: 700; margin-top: 4px; }
+.insight p { margin: 6px 0 0; font-size: .88rem; color: var(--muted); }
+
+/* 외부 사이트 */
+.sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.site { display: block; text-decoration: none; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; transition: border-color .15s; }
+.site:hover { border-color: var(--accent); }
+.site .n { font-weight: 700; }
+.site .s { font-size: .8rem; color: var(--muted); }
+.site .go { font-size: .8rem; color: var(--accent); margin-top: 4px; }
+
+footer { color: var(--muted); font-size: .82rem; margin-top: 24px; }
+footer a { color: var(--accent); }
+details.howto summary { cursor: pointer; font-weight: 700; }
+details.howto p, details.howto li { font-size: .9rem; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .hero, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .week { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .week { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .now-temp { font-size: 2.6rem; }
+  .big-emoji { font-size: 3.4rem; }
+  .chart-box { height: 280px; }
+  .card { padding: 16px; }
+  .model-now .row { grid-template-columns: 92px 1fr 46px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>🌏 세계 날씨 비교 예보</h1>
+      <p>세계 주요 기상기관의 예보 모델을 한 화면에서 비교하고, 모델 합의로 종합 예측을 계산합니다.</p>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="화면 테마 전환">🌓 테마</button>
+  </header>
+
+  <section class="card">
+    <div class="search-row">
+      <input id="q" type="search" placeholder="도시 이름 검색 (예: 서울, 제주, Tokyo, Paris)" autocomplete="off" aria-label="지역 검색">
+      <button class="btn" id="searchBtn" type="button">검색</button>
+      <button class="btn ghost" id="geoBtn" type="button">📍 현재 위치</button>
+      <div class="results" id="results" role="listbox"></div>
+    </div>
+    <div class="chips" id="quick"></div>
+  </section>
+
+  <div class="loc-head">
+    <h2 id="locName">지역을 선택하세요</h2>
+    <span class="meta" id="locMeta"></span>
+  </div>
+  <div class="banner" id="banner"></div>
+
+  <div id="app"><div class="loading">예보를 불러오는 중…</div></div>
+
+  <footer>
+    <details class="howto card">
+      <summary>ℹ️ 이 앱은 어떻게 예측하나요?</summary>
+      <ul>
+        <li><b>비교 대상</b>: 네이버·AccuWeather·Weather.com 같은 날씨 사이트와 앱은 대부분 아래 기상기관의 수치예보 모델을 가져와 자체 보정해서 보여줍니다. 이 앱은 그 원천 모델(기상청 KMA, 유럽 ECMWF, 미국 GFS, 독일 ICON, 일본 JMA, 영국 Met Office, 프랑스 Météo-France, 캐나다 GEM)을 직접 비교합니다.</li>
+        <li><b>종합 기온</b>: 모델이 5개 이상이면 가장 높은 값과 가장 낮은 값을 뺀 뒤 평균(절사평균)을 내서 튀는 예보의 영향을 줄입니다.</li>
+        <li><b>강수 확률</b>: 하루 강수량을 1mm 이상으로 예측한 모델의 비율입니다. 8개 중 6개가 비를 예상하면 75%입니다.</li>
+        <li><b>신뢰도</b>: 모델 간 최고기온 차이와 강수 의견 일치 정도로 판단합니다. 모델끼리 의견이 비슷할수록 신뢰도가 높습니다.</li>
+        <li>AccuWeather·Weather.com 등 상업 서비스의 수치는 유료 API 키가 필요해 직접 가져오지 않고, 아래 링크로 같은 지역 예보를 바로 열 수 있게 했습니다.</li>
+      </ul>
+    </details>
+    데이터: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0) · 각국 기상기관 수치예보 모델
+  </footer>
+</div>
+
+<script>
+'use strict';
+
+// ---------- 설정 ----------
+const MODELS = [
+  { id: 'kma_seamless',         name: '기상청 KMA',     org: '대한민국 기상청',     color: '#2563eb' },
+  { id: 'ecmwf_ifs025',         name: 'ECMWF',          org: '유럽중기예보센터',    color: '#7c3aed' },
+  { id: 'gfs_seamless',         name: 'NOAA GFS',       org: '미국 해양대기청',     color: '#dc2626' },
+  { id: 'icon_seamless',        name: 'DWD ICON',       org: '독일 기상청',         color: '#d97706' },
+  { id: 'jma_seamless',         name: 'JMA',            org: '일본 기상청',         color: '#db2777' },
+  { id: 'ukmo_seamless',        name: 'UK Met Office',  org: '영국 기상청',         color: '#059669' },
+  { id: 'meteofrance_seamless', name: 'Météo-France',   org: '프랑스 기상청',       color: '#0891b2' },
+  { id: 'gem_seamless',         name: 'GEM',            org: '캐나다 기상청',       color: '#65a30d' },
+];
+const DAILY_VARS = ['weather_code', 'temperature_2m_max', 'temperature_2m_min', 'precipitation_sum', 'precipitation_probability_max', 'wind_speed_10m_max'];
+const HOURLY_VARS = ['temperature_2m', 'precipitation', 'weather_code'];
+const QUICK = [
+  { name: '서울', lat: 37.5665, lon: 126.978, country: '대한민국' },
+  { name: '부산', lat: 35.1796, lon: 129.0756, country: '대한민국' },
+  { name: '제주', lat: 33.4996, lon: 126.5312, country: '대한민국' },
+  { name: '강릉', lat: 37.7519, lon: 128.8761, country: '대한민국' },
+  { name: '도쿄', lat: 35.6762, lon: 139.6503, country: '일본' },
+  { name: '베이징', lat: 39.9042, lon: 116.4074, country: '중국' },
+  { name: '뉴욕', lat: 40.7128, lon: -74.006, country: '미국' },
+  { name: '런던', lat: 51.5072, lon: -0.1276, country: '영국' },
+  { name: '파리', lat: 48.8566, lon: 2.3522, country: '프랑스' },
+  { name: '시드니', lat: -33.8688, lon: 151.2093, country: '호주' },
+];
+const RAIN_MM = 1; // 이 값 이상이면 "비 예보"로 판단
+
+// WMO 날씨 코드 → [설명, 이모지, 범주]
+const WMO = {
+  0: ['맑음', '☀️', 'clear'], 1: ['대체로 맑음', '🌤️', 'clear'], 2: ['구름 조금', '⛅', 'cloud'], 3: ['흐림', '☁️', 'cloud'],
+  45: ['안개', '🌫️', 'fog'], 48: ['짙은 안개', '🌫️', 'fog'],
+  51: ['약한 이슬비', '🌦️', 'rain'], 53: ['이슬비', '🌦️', 'rain'], 55: ['강한 이슬비', '🌧️', 'rain'],
+  56: ['어는 이슬비', '🌧️', 'rain'], 57: ['어는 이슬비', '🌧️', 'rain'],
+  61: ['약한 비', '🌦️', 'rain'], 63: ['비', '🌧️', 'rain'], 65: ['강한 비', '🌧️', 'rain'],
+  66: ['어는 비', '🌧️', 'rain'], 67: ['강한 어는 비', '🌧️', 'rain'],
+  71: ['약한 눈', '🌨️', 'snow'], 73: ['눈', '🌨️', 'snow'], 75: ['많은 눈', '❄️', 'snow'], 77: ['싸락눈', '🌨️', 'snow'],
+  80: ['약한 소나기', '🌦️', 'rain'], 81: ['소나기', '🌧️', 'rain'], 82: ['강한 소나기', '⛈️', 'rain'],
+  85: ['소낙눈', '🌨️', 'snow'], 86: ['강한 소낙눈', '❄️', 'snow'],
+  95: ['뇌우', '⛈️', 'storm'], 96: ['우박 동반 뇌우', '⛈️', 'storm'], 99: ['강한 우박 뇌우', '⛈️', 'storm'],
+};
+const CAT_RANK = { clear: 0, cloud: 1, fog: 2, rain: 3, snow: 4, storm: 5 };
+const wmo = c => WMO[c] || ['정보 없음', '❔', 'cloud'];
+
+// ---------- 상태 ----------
+const state = {
+  loc: null,
+  data: null,
+  demo: false,
+  enabled: new Set(MODELS.map(m => m.id)),
+  hourRange: 48,
+  charts: {},
+};
+
+// ---------- 유틸 ----------
+const $ = id => document.getElementById(id);
+const isNum = v => typeof v === 'number' && !Number.isNaN(v);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const r1 = v => isNum(v) ? Math.round(v * 10) / 10 : null;
+const fmtT = v => isNum(v) ? `${Math.round(v)}°` : '–';
+const fmtMM = v => isNum(v) ? (v < 0.1 ? '0' : v < 10 ? v.toFixed(1) : Math.round(v)) + 'mm' : '–';
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 저장 불가 환경 */ } },
+};
+
+function robustMean(values) {
+  const a = values.filter(isNum).sort((x, y) => x - y);
+  if (!a.length) return null;
+  const b = a.length >= 5 ? a.slice(1, -1) : a;
+  return b.reduce((s, v) => s + v, 0) / b.length;
+}
+function median(values) {
+  const a = values.filter(isNum).sort((x, y) => x - y);
+  if (!a.length) return null;
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+function dayLabel(iso, i) {
+  const d = new Date(iso + 'T12:00:00');
+  const w = '일월화수목금토'[d.getDay()];
+  if (i === 0) return `오늘 (${w})`;
+  if (i === 1) return `내일 (${w})`;
+  return `${d.getMonth() + 1}/${d.getDate()} (${w})`;
+}
+
+// ---------- 데이터 ----------
+async function fetchForecast(loc) {
+  const p = new URLSearchParams({
+    latitude: loc.lat, longitude: loc.lon, timezone: 'auto', forecast_days: 7,
+    daily: DAILY_VARS.join(','), hourly: HOURLY_VARS.join(','),
+    models: MODELS.map(m => m.id).join(','),
+  });
+  const res = await fetch('https://api.open-meteo.com/v1/forecast?' + p);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return normalize(await res.json());
+}
+
+// API 응답을 { daily.time, hourly.time, models[id].daily/hourly } 형태로 정리
+function normalize(j) {
+  const out = { daily: { time: j.daily.time }, hourly: { time: j.hourly.time }, offset: j.utc_offset_seconds || 0, tz: j.timezone_abbreviation || j.timezone || '', models: {} };
+  const pick = (block, v, id, len) => block[`${v}_${id}`] || (MODELS.length === 1 ? block[v] : null) || new Array(len).fill(null);
+  for (const m of MODELS) {
+    const daily = {}, hourly = {};
+    DAILY_VARS.forEach(v => { daily[v] = pick(j.daily, v, m.id, j.daily.time.length); });
+    HOURLY_VARS.forEach(v => { hourly[v] = pick(j.hourly, v, m.id, j.hourly.time.length); });
+    out.models[m.id] = { daily, hourly, available: daily.temperature_2m_max.some(isNum) };
+  }
+  return out;
+}
+
+// 네트워크가 막혔을 때 보여줄 예시 데이터
+function demoData(loc) {
+  let seed = Math.round((loc.lat + 90) * 1000 + (loc.lon + 180) * 7);
+  const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const now = new Date(); now.setMinutes(0, 0, 0);
+  const start = new Date(now); start.setHours(0);
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const dTimes = [], hTimes = [];
+  for (let i = 0; i < 7; i++) { const d = new Date(start); d.setDate(d.getDate() + i); dTimes.push(iso(d)); }
+  for (let h = 0; h < 168; h++) { const d = new Date(start); d.setHours(h); hTimes.push(`${iso(d)}T${pad(d.getHours())}:00`); }
+  const base = 18 - Math.abs(loc.lat) * 0.25;
+  const rainDays = dTimes.map(() => rnd());
+  const out = { daily: { time: dTimes }, hourly: { time: hTimes }, offset: -now.getTimezoneOffset() * 60, tz: '', models: {} };
+  MODELS.forEach((m, mi) => {
+    const bias = (rnd() - 0.5) * 3, hourly = { temperature_2m: [], precipitation: [], weather_code: [] };
+    for (let h = 0; h < 168; h++) {
+      const day = Math.floor(h / 24), hr = h % 24;
+      const t = base + 2 * Math.sin(day / 2) + bias + 5 * Math.sin((hr - 9) / 24 * 2 * Math.PI) + (rnd() - 0.5) * 1.5 * (1 + day / 3);
+      const wet = rainDays[day] + (rnd() - 0.5) * 0.35 > 0.62 && hr > 6 && hr < 20;
+      const p = wet ? r1(rnd() * 2.5) : 0;
+      hourly.temperature_2m.push(r1(t)); hourly.precipitation.push(p);
+      hourly.weather_code.push(p > 1.5 ? 63 : p > 0 ? 61 : rnd() > 0.5 ? 2 : 1);
+    }
+    if (mi === 6) hourly.temperature_2m = hourly.temperature_2m.map((v, h) => h < 96 ? v : null); // 일부 모델은 예보 기간이 짧음
+    const daily = { weather_code: [], temperature_2m_max: [], temperature_2m_min: [], precipitation_sum: [], precipitation_probability_max: [], wind_speed_10m_max: [] };
+    for (let d = 0; d < 7; d++) {
+      const ts = hourly.temperature_2m.slice(d * 24, d * 24 + 24).filter(isNum);
+      const ps = hourly.precipitation.slice(d * 24, d * 24 + 24);
+      const sum = r1(ps.reduce((s, v) => s + v, 0));
+      daily.temperature_2m_max.push(ts.length ? Math.max(...ts) : null);
+      daily.temperature_2m_min.push(ts.length ? Math.min(...ts) : null);
+      daily.precipitation_sum.push(ts.length ? sum : null);
+      daily.weather_code.push(!ts.length ? null : sum > 10 ? 65 : sum > 3 ? 63 : sum >= 1 ? 61 : rnd() > 0.5 ? 3 : 1);
+      daily.precipitation_probability_max.push(null);
+      daily.wind_speed_10m_max.push(ts.length ? r1(10 + rnd() * 25) : null);
+    }
+    out.models[m.id] = { daily, hourly, available: true };
+  });
+  return out;
+}
+
+// ---------- 종합 예측 계산 ----------
+function activeModels() {
+  return MODELS.filter(m => state.enabled.has(m.id) && state.data.models[m.id].available);
+}
+
+function consensusCode(codes) {
+  const valid = codes.filter(isNum);
+  if (!valid.length) return null;
+  const count = {};
+  valid.forEach(c => { const k = wmo(c)[2]; count[k] = (count[k] || 0) + 1; });
+  const cat = Object.keys(count).sort((a, b) => count[b] - count[a] || CAT_RANK[b] - CAT_RANK[a])[0];
+  const inCat = valid.filter(c => wmo(c)[2] === cat).sort((a, b) => a - b);
+  return inCat[Math.floor(inCat.length / 2)];
+}
+
+function computeDaily() {
+  const ms = activeModels();
+  return state.data.daily.time.map((t, i) => {
+    const get = v => ms.map(m => state.data.models[m.id].daily[v][i]);
+    const tmaxs = get('temperature_2m_max'), tmins = get('temperature_2m_min'), precs = get('precipitation_sum');
+    const validPrec = precs.filter(isNum);
+    const wetCount = validPrec.filter(v => v >= RAIN_MM).length;
+    const n = validPrec.length;
+    const rainChance = n ? Math.round(wetCount / n * 100) : null;
+    const validMax = tmaxs.filter(isNum);
+    const spread = validMax.length > 1 ? Math.max(...validMax) - Math.min(...validMax) : 0;
+    let code = consensusCode(get('weather_code'));
+    // 날씨 아이콘을 강수 확률과 맞춰 줌
+    if (rainChance !== null && rainChance < 50 && code !== null && ['rain', 'snow', 'storm'].includes(wmo(code)[2])) code = 3;
+    return {
+      time: t,
+      tmax: robustMean(tmaxs), tmin: robustMean(tmins),
+      prec: median(precs), precMax: validPrec.length ? Math.max(...validPrec) : null,
+      rainChance, wetCount, n, spread,
+      wind: robustMean(get('wind_speed_10m_max')),
+      code,
+      conf: confidence(spread, rainChance, validMax.length),
+    };
+  });
+}
+
+function confidence(spread, rainChance, n) {
+  if (n < 2) return { level: 'low', label: '판단 불가', score: 0 };
+  let score = 100;
+  score -= Math.min(50, Math.max(0, spread - 1) * 10);
+  if (rainChance !== null) score -= (50 - Math.abs(rainChance - 50)) * 0.8; // 50%에 가까울수록 의견이 갈림
+  score = Math.max(0, Math.round(score));
+  if (score >= 70) return { level: 'high', label: '신뢰도 높음', score };
+  if (score >= 45) return { level: 'mid', label: '신뢰도 보통', score };
+  return { level: 'low', label: '신뢰도 낮음', score };
+}
+
+function nowIndex() {
+  const d = state.data;
+  const local = new Date(Date.now() + d.offset * 1000).toISOString().slice(0, 13);
+  const i = d.hourly.time.findIndex(t => t.slice(0, 13) === local);
+  return i < 0 ? 0 : i;
+}
+
+function hourlyConsensus(v) {
+  const ms = activeModels();
+  return state.data.hourly.time.map((_, i) => robustMean(ms.map(m => state.data.models[m.id].hourly[v][i])));
+}
+
+function adviceFor(day) {
+  const out = [];
+  if (!day) return out;
+  const gap = isNum(day.tmax) && isNum(day.tmin) ? day.tmax - day.tmin : 0;
+  if (day.rainChance >= 60) out.push(`☔ 우산을 꼭 챙기세요. ${day.n}개 모델 중 ${day.wetCount}개가 비를 예상합니다.`);
+  else if (day.rainChance >= 30) out.push(`🌂 작은 우산을 챙기면 좋아요. 일부 모델(${day.wetCount}/${day.n})이 비를 예상합니다.`);
+  if (day.code !== null && wmo(day.code)[2] === 'snow') out.push('❄️ 눈 소식이 있어요. 미끄럼에 주의하세요.');
+  if (day.code !== null && wmo(day.code)[2] === 'storm') out.push('⚡ 뇌우 가능성이 있어요. 야외 활동에 주의하세요.');
+  if (isNum(day.tmax) && day.tmax >= 33) out.push('🥵 폭염 수준입니다. 물을 자주 마시고 한낮 야외 활동을 줄이세요.');
+  else if (isNum(day.tmax) && day.tmax >= 28) out.push('😎 덥습니다. 가벼운 옷차림이 좋아요.');
+  if (isNum(day.tmin) && day.tmin <= -5) out.push('🧣 매우 춥습니다. 두꺼운 외투와 장갑을 챙기세요.');
+  else if (isNum(day.tmin) && day.tmin <= 5) out.push('🧥 쌀쌀합니다. 따뜻한 겉옷을 챙기세요.');
+  if (gap >= 10) out.push(`🌡️ 일교차가 ${Math.round(gap)}°로 큽니다. 겹쳐 입기 좋은 옷을 추천해요.`);
+  if (isNum(day.wind) && day.wind >= 40) out.push(`💨 바람이 강해요 (최대 ${Math.round(day.wind)}km/h).`);
+  if (day.conf.level === 'low') out.push('🔄 모델 간 의견 차이가 커서 예보가 바뀔 수 있어요. 나중에 다시 확인하세요.');
+  if (!out.length) out.push('🙂 특별히 주의할 점이 없는 무난한 날씨입니다.');
+  return out;
+}
+
+function summaryText(day, isToday) {
+  if (!day || !isNum(day.tmax)) return '예보 정보가 부족합니다.';
+  const when = isToday ? '오늘' : '내일';
+  const desc = day.code !== null ? wmo(day.code)[0] : '';
+  let rain;
+  if (day.rainChance === 0) rain = '비를 예상한 모델은 없습니다.';
+  else if (day.rainChance >= 60) rain = `${day.n}개 모델 중 ${day.wetCount}개가 비를 예상해 비 올 가능성이 높습니다(예상 강수량 약 ${fmtMM(day.prec)}).`;
+  else rain = `${day.n}개 모델 중 ${day.wetCount}개만 비를 예상해 강수 가능성은 ${day.rainChance >= 30 ? '보통' : '낮은'} 편입니다.`;
+  return `${when}은 ${desc}, 최고 ${fmtT(day.tmax)} / 최저 ${fmtT(day.tmin)}로 예상됩니다. ${rain} 모델 간 최고기온 차이는 ${day.spread.toFixed(1)}°입니다.`;
+}
+
+// ---------- 렌더링 ----------
+function render() {
+  const app = $('app');
+  if (!state.data) return;
+  const ms = activeModels();
+  if (!ms.length) {
+    app.innerHTML = renderToggles() + '<div class="card loading">비교할 모델을 하나 이상 선택하세요.</div>';
+    bindToggles();
+    return;
+  }
+  const days = computeDaily();
+  app.innerHTML = renderHero(days) + renderWeek(days) + renderToggles() + renderTable(days) + renderCharts() + renderInsights(days) + renderSites();
+  bindToggles();
+  bindCharts();
+  drawCharts(days);
+}
+
+function renderHero(days) {
+  const today = days[0], tmr = days[1];
+  const hi = nowIndex();
+  const nowT = robustMean(activeModels().map(m => state.data.models[m.id].hourly.temperature_2m[hi]));
+  const nowCode = consensusCode(activeModels().map(m => state.data.models[m.id].hourly.weather_code[hi]));
+  const [desc, emoji] = wmo(nowCode !== null ? nowCode : today.code);
+  const modelNow = activeModels().map(m => ({ m, v: state.data.models[m.id].hourly.temperature_2m[hi] })).filter(x => isNum(x.v));
+  const lo = Math.min(...modelNow.map(x => x.v)) - 2, hiV = Math.max(...modelNow.map(x => x.v)) + 2;
+  return `
+  <section class="card hero">
+    <div>
+      <h2>종합 예측 · 지금</h2>
+      <p class="sub">${activeModels().length}개 모델의 예보를 합쳐 계산한 결과입니다.</p>
+      <div class="hero-main">
+        <div class="big-emoji" aria-hidden="true">${emoji}</div>
+        <div>
+          <div class="now-temp">${fmtT(nowT)}</div>
+          <div class="now-desc">${desc} · 지금 시각 기준 종합 기온</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="k">오늘 최고</div><div class="v">${fmtT(today.tmax)}</div></div>
+        <div class="stat"><div class="k">오늘 최저</div><div class="v">${fmtT(today.tmin)}</div></div>
+        <div class="stat"><div class="k">강수 확률</div><div class="v" style="color:var(--rain)">${today.rainChance ?? '–'}%</div></div>
+        <div class="stat"><div class="k">예상 강수량</div><div class="v">${fmtMM(today.prec)}</div></div>
+        <div class="stat"><div class="k">예측 신뢰도</div><div class="v"><span class="badge ${today.conf.level}">${today.conf.label}</span></div></div>
+      </div>
+      <p class="summary">${summaryText(today, true)}</p>
+      <ul class="advice">${adviceFor(today).map(a => `<li>${a}</li>`).join('')}</ul>
+    </div>
+    <div class="tomorrow">
+      <h3>모델별 현재 기온</h3>
+      <div class="model-now">
+        ${modelNow.map(({ m, v }) => `
+          <div class="row"><span>${esc(m.name)}</span>
+            <div class="bar"><span style="width:${Math.max(4, (v - lo) / (hiV - lo) * 100)}%;background:${m.color}"></span></div>
+            <span class="val">${v.toFixed(1)}°</span></div>`).join('')}
+      </div>
+      <h3 style="margin-top:18px">내일 예측 ${tmr ? `<span class="badge ${tmr.conf.level}">${tmr.conf.label}</span>` : ''}</h3>
+      ${tmr ? `<div style="display:flex;gap:12px;align-items:center"><span style="font-size:2.4rem">${wmo(tmr.code)[1]}</span>
+        <div><b style="font-size:1.2rem">${fmtT(tmr.tmax)} / ${fmtT(tmr.tmin)}</b><br><span style="color:var(--rain)">강수 확률 ${tmr.rainChance ?? '–'}%</span></div></div>
+        <p style="font-size:.9rem;margin:10px 0 0">${summaryText(tmr, false)}</p>` : ''}
+    </div>
+  </section>`;
+}
+
+function renderWeek(days) {
+  return `
+  <section class="card">
+    <h2>7일 종합 예보</h2>
+    <p class="sub">모든 모델의 합의로 계산한 일별 예측입니다. 점 색깔은 신뢰도(초록 높음 · 노랑 보통 · 빨강 낮음)입니다.</p>
+    <div class="week">
+      ${days.map((d, i) => `
+        <div class="day" title="${esc(wmo(d.code)[0])}">
+          <div class="d">${dayLabel(d.time, i)}</div>
+          <div class="e" aria-label="${esc(wmo(d.code)[0])}">${wmo(d.code)[1]}</div>
+          <div class="t">${fmtT(d.tmax)} <span class="lo">${fmtT(d.tmin)}</span></div>
+          <div class="r">💧 ${d.rainChance ?? '–'}% · ${fmtMM(d.prec)}</div>
+          <div class="c"><span class="badge ${d.conf.level}">${d.conf.label.replace('신뢰도 ', '')}</span></div>
+        </div>`).join('')}
+    </div>
+  </section>`;
+}
+
+function renderToggles() {
+  return `
+  <section class="card">
+    <h2>비교할 예보 모델</h2>
+    <p class="sub">체크를 해제하면 해당 모델을 비교와 종합 예측에서 뺍니다.</p>
+    <div class="model-toggles">
+      ${MODELS.map(m => {
+        const avail = state.data.models[m.id].available;
+        const on = state.enabled.has(m.id) && avail;
+        return `<label class="mt ${on ? '' : 'off'} ${avail ? '' : 'na'}" title="${esc(m.org)}${avail ? '' : ' · 이 지역 데이터 없음'}">
+          <input type="checkbox" data-model="${m.id}" ${on ? 'checked' : ''} ${avail ? '' : 'disabled'}>
+          <span class="dot" style="background:${m.color}"></span>${esc(m.name)}${avail ? '' : ' (데이터 없음)'}</label>`;
+      }).join('')}
+    </div>
+  </section>`;
+}
+
+function renderTable(days) {
+  const rowFor = m => {
+    const d = state.data.models[m.id].daily;
+    if (!state.data.models[m.id].available) return '';
+    return `<tr>
+      <th class="model"><div class="nm"><span class="dot" style="width:10px;height:10px;border-radius:50%;background:${m.color}"></span>${esc(m.name)}</div><div class="org">${esc(m.org)}</div></th>
+      ${days.map((c, i) => {
+        const tx = d.temperature_2m_max[i];
+        if (!isNum(tx)) return '<td>–</td>';
+        const dev = isNum(c.tmax) ? tx - c.tmax : 0;
+        const cls = dev >= 2.5 ? 'dev-hi' : dev <= -2.5 ? 'dev-lo' : '';
+        const p = d.precipitation_sum[i];
+        return `<td class="${cls}" title="종합 대비 ${dev >= 0 ? '+' : ''}${dev.toFixed(1)}°">
+          <div class="e">${wmo(d.weather_code[i])[1]}</div>
+          <div class="t">${fmtT(tx)} <span class="lo">${fmtT(d.temperature_2m_min[i])}</span></div>
+          <div class="p">${isNum(p) && p >= RAIN_MM ? '💧' : ''}${fmtMM(p)}</div></td>`;
+      }).join('')}
+    </tr>`;
+  };
+  return `
+  <section class="card">
+    <h2>모델별 예보 비교표</h2>
+    <p class="sub">각 칸: 날씨 · 최고/최저 기온 · 하루 강수량. 표가 넓으면 옆으로 밀어서 보세요.</p>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead><tr><th class="model">모델</th>${days.map((d, i) => `<th>${dayLabel(d.time, i)}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${activeModels().map(rowFor).join('')}
+          <tr class="cons">
+            <th class="model"><div class="nm">⭐ 종합 예측</div><div class="org">모델 합의</div></th>
+            ${days.map(c => `<td><div class="e">${wmo(c.code)[1]}</div>
+              <div class="t">${fmtT(c.tmax)} <span class="lo">${fmtT(c.tmin)}</span></div>
+              <div class="p">💧 ${c.rainChance ?? '–'}%</div>
+              <span class="badge ${c.conf.level}" style="margin-top:4px">${c.conf.label.replace('신뢰도 ', '')}</span></td>`).join('')}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><i style="background:color-mix(in srgb, var(--bad) 25%, transparent)"></i>종합보다 2.5° 이상 높게 예측</span>
+      <span><i style="background:color-mix(in srgb, var(--accent) 25%, transparent)"></i>종합보다 2.5° 이상 낮게 예측</span>
+      <span>💧 ${RAIN_MM}mm 이상 비 예보</span>
+    </div>
+  </section>`;
+}
+
+function renderCharts() {
+  return `
+  <section class="card">
+    <div class="chart-head">
+      <div><h2>시간별 기온 비교</h2><p class="sub">굵은 점선이 종합 예측입니다. 선이 넓게 퍼질수록 모델 간 의견이 다릅니다.</p></div>
+      <div class="seg" role="group" aria-label="기간 선택">
+        <button type="button" data-range="48" class="${state.hourRange === 48 ? 'on' : ''}">48시간</button>
+        <button type="button" data-range="168" class="${state.hourRange === 168 ? 'on' : ''}">7일</button>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="tempChart"></canvas></div>
+  </section>
+  <section class="grid2">
+    <div class="card">
+      <h2>일별 강수량 비교</h2>
+      <p class="sub">모델마다 예측한 하루 강수량(mm)입니다.</p>
+      <div class="chart-box"><canvas id="precChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>최고기온 예측 범위</h2>
+      <p class="sub">막대는 모델들의 최고기온 최솟값~최댓값, 점은 종합 예측입니다.</p>
+      <div class="chart-box"><canvas id="rangeChart"></canvas></div>
+    </div>
+  </section>`;
+}
+
+function renderInsights(days) {
+  const ms = activeModels();
+  // 주간 평균 편차가 가장 큰 모델 = 다른 모델과 가장 의견이 다른 모델
+  const devs = ms.map(m => {
+    const tx = state.data.models[m.id].daily.temperature_2m_max;
+    const diffs = days.map((c, i) => isNum(tx[i]) && isNum(c.tmax) ? tx[i] - c.tmax : null).filter(isNum);
+    const mean = diffs.length ? diffs.reduce((s, v) => s + v, 0) / diffs.length : 0;
+    const total = state.data.models[m.id].daily.precipitation_sum.filter(isNum).reduce((s, v) => s + v, 0);
+    return { m, mean, abs: Math.abs(mean), total };
+  });
+  const outlier = [...devs].sort((a, b) => b.abs - a.abs)[0];
+  const warmest = [...devs].sort((a, b) => b.mean - a.mean)[0];
+  const wettest = [...devs].sort((a, b) => b.total - a.total)[0];
+  const driest = [...devs].sort((a, b) => a.total - b.total)[0];
+  const best = days.reduce((a, d, i) => (d.conf.score > a.d.conf.score ? { d, i } : a), { d: days[0], i: 0 });
+  const worst = days.reduce((a, d, i) => (d.conf.score < a.d.conf.score ? { d, i } : a), { d: days[0], i: 0 });
+  const rainyDays = days.map((d, i) => d.rainChance >= 50 ? dayLabel(d.time, i) : null).filter(Boolean);
+  return `
+  <section class="card">
+    <h2>예보 분석</h2>
+    <p class="sub">모델들의 예보 성향과 이번 주 핵심 포인트입니다.</p>
+    <div class="insights">
+      <div class="insight"><div class="k">☔ 이번 주 비 소식</div><div class="v">${rainyDays.length ? esc(rainyDays.join(', ')) : '뚜렷한 비 소식 없음'}</div><p>모델 절반 이상이 ${RAIN_MM}mm 이상 비를 예상한 날입니다.</p></div>
+      <div class="insight"><div class="k">🎯 가장 확실한 날</div><div class="v">${dayLabel(best.d.time, best.i)} · ${best.d.conf.score}점</div><p>모델들의 의견이 가장 잘 맞는 날입니다.</p></div>
+      <div class="insight"><div class="k">🔄 가장 불확실한 날</div><div class="v">${dayLabel(worst.d.time, worst.i)} · ${worst.d.conf.score}점</div><p>최고기온 차이 ${worst.d.spread.toFixed(1)}°, 강수 의견 ${worst.d.wetCount}/${worst.d.n}. 예보가 바뀔 수 있어요.</p></div>
+      ${ms.length > 1 ? `
+      <div class="insight"><div class="k">🧭 혼자 다른 의견을 낸 모델</div><div class="v">${esc(outlier.m.name)}</div><p>종합 예측보다 최고기온을 평균 ${outlier.mean >= 0 ? '+' : ''}${outlier.mean.toFixed(1)}° ${outlier.mean >= 0 ? '높게' : '낮게'} 예측합니다.</p></div>
+      <div class="insight"><div class="k">🔥 가장 덥게 보는 모델</div><div class="v">${esc(warmest.m.name)}</div><p>주간 평균 ${warmest.mean >= 0 ? '+' : ''}${warmest.mean.toFixed(1)}°</p></div>
+      <div class="insight"><div class="k">💧 강수량: 가장 많이 / 적게</div><div class="v">${esc(wettest.m.name)} ${fmtMM(wettest.total)} / ${esc(driest.m.name)} ${fmtMM(driest.total)}</div><p>7일 누적 강수량 기준입니다.</p></div>` : ''}
+    </div>
+  </section>`;
+}
+
+function renderSites() {
+  const { lat, lon, name } = state.loc;
+  const q = encodeURIComponent(name);
+  const la = lat.toFixed(3), lo = lon.toFixed(3);
+  const sites = [
+    { n: '기상청 날씨누리', s: '대한민국 공식 예보', u: 'https://www.weather.go.kr/w/index.do' },
+    { n: '네이버 날씨', s: '국내 포털 날씨', u: `https://search.naver.com/search.naver?query=${encodeURIComponent(name + ' 날씨')}` },
+    { n: 'AccuWeather', s: '미국 민간 기상 서비스', u: `https://www.accuweather.com/ko/search-locations?query=${q}` },
+    { n: 'The Weather Channel', s: 'weather.com (IBM)', u: `https://weather.com/ko-KR/weather/today/l/${la},${lo}` },
+    { n: 'Windy', s: '여러 모델 지도 비교', u: `https://www.windy.com/${la}/${lo}?${la},${lo},9` },
+    { n: 'Ventusky', s: '바람·기온 지도', u: `https://www.ventusky.com/?p=${la};${lo};8` },
+    { n: 'yr.no', s: '노르웨이 기상청', u: `https://www.yr.no/en/search?q=${q}` },
+    { n: 'Google 날씨', s: '구글 검색 날씨', u: `https://www.google.com/search?q=${encodeURIComponent(name + ' weather')}` },
+  ];
+  return `
+  <section class="card">
+    <h2>다른 날씨 사이트에서 보기</h2>
+    <p class="sub">상업 서비스는 자체 보정 예보를 제공합니다. 같은 지역 예보를 새 창으로 열어 함께 비교해 보세요.</p>
+    <div class="sites">
+      ${sites.map(s => `<a class="site" href="${esc(s.u)}" target="_blank" rel="noopener"><div class="n">${esc(s.n)}</div><div class="s">${esc(s.s)}</div><div class="go">열기 ↗</div></a>`).join('')}
+    </div>
+  </section>`;
+}
+
+// ---------- 차트 ----------
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+function drawCharts(days) {
+  Object.values(state.charts).forEach(c => c.destroy());
+  state.charts = {};
+  if (!window.Chart) {
+    document.querySelectorAll('.chart-box').forEach(b => { b.innerHTML = '<div class="loading">차트 라이브러리를 불러오지 못했습니다.</div>'; });
+    return;
+  }
+  const text = cssVar('--muted'), grid = cssVar('--line'), cons = cssVar('--consensus');
+  Chart.defaults.color = text;
+  Chart.defaults.font.family = '"Noto Sans KR", system-ui, sans-serif';
+  const ms = activeModels();
+  const scales = { x: { grid: { color: grid } }, y: { grid: { color: grid } } };
+
+  // 시간별 기온
+  const start = state.hourRange === 48 ? nowIndex() : 0;
+  const end = Math.min(start + state.hourRange, state.data.hourly.time.length);
+  const labels = state.data.hourly.time.slice(start, end).map(t => {
+    const d = new Date(t);
+    return d.getHours() === 0 || state.hourRange === 48 ? `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}시` : `${d.getHours()}시`;
+  });
+  const consT = hourlyConsensus('temperature_2m').slice(start, end);
+  state.charts.temp = new Chart($('tempChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        ...ms.map(m => ({ label: m.name, data: state.data.models[m.id].hourly.temperature_2m.slice(start, end), borderColor: m.color, backgroundColor: m.color, borderWidth: 1.5, pointRadius: 0, tension: .3, spanGaps: true })),
+        { label: '종합 예측', data: consT, borderColor: cons, backgroundColor: cons, borderWidth: 3.5, borderDash: [6, 4], pointRadius: 0, tension: .3 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${isNum(c.raw) ? c.raw.toFixed(1) + '°' : '–'}` } } },
+      scales: { x: { ...scales.x, ticks: { maxTicksLimit: 12, autoSkip: true } }, y: { ...scales.y, ticks: { callback: v => v + '°' } } },
+    },
+  });
+
+  // 일별 강수량
+  const dl = days.map((d, i) => dayLabel(d.time, i).replace(/ \(.\)/, ''));
+  state.charts.prec = new Chart($('precChart'), {
+    type: 'bar',
+    data: {
+      labels: dl,
+      datasets: ms.map(m => ({ label: m.name, data: state.data.models[m.id].daily.precipitation_sum, backgroundColor: m.color, borderRadius: 3 })),
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtMM(c.raw)}` } } },
+      scales: { x: scales.x, y: { ...scales.y, beginAtZero: true, ticks: { callback: v => v + 'mm' } } },
+    },
+  });
+
+  // 최고기온 범위
+  const ranges = days.map((_, i) => {
+    const v = ms.map(m => state.data.models[m.id].daily.temperature_2m_max[i]).filter(isNum);
+    return v.length ? [Math.min(...v), Math.max(...v)] : null;
+  });
+  state.charts.range = new Chart($('rangeChart'), {
+    data: {
+      labels: dl,
+      datasets: [
+        { type: 'bar', label: '모델 예측 범위', data: ranges, backgroundColor: cssVar('--accent-soft'), borderColor: cssVar('--accent'), borderWidth: 1, borderRadius: 6, borderSkipped: false },
+        { type: 'line', label: '종합 예측', data: days.map(d => d.tmax), borderColor: cons, backgroundColor: cons, pointRadius: 5, borderWidth: 2 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: c => Array.isArray(c.raw) ? `범위: ${c.raw[0].toFixed(1)}° ~ ${c.raw[1].toFixed(1)}°` : `종합: ${isNum(c.raw) ? c.raw.toFixed(1) : '–'}°` } } },
+      scales: { x: scales.x, y: { ...scales.y, ticks: { callback: v => v + '°' } } },
+    },
+  });
+}
+
+// ---------- 이벤트 ----------
+function bindToggles() {
+  document.querySelectorAll('[data-model]').forEach(cb => cb.addEventListener('change', () => {
+    if (cb.checked) state.enabled.add(cb.dataset.model); else state.enabled.delete(cb.dataset.model);
+    store.set('wc-enabled', [...state.enabled]);
+    render();
+  }));
+}
+function bindCharts() {
+  document.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => {
+    state.hourRange = Number(b.dataset.range);
+    render();
+  }));
+}
+
+async function loadLocation(loc) {
+  state.loc = loc;
+  store.set('wc-loc', loc);
+  $('locName').textContent = loc.name;
+  $('locMeta').textContent = [loc.admin, loc.country].filter(Boolean).join(', ');
+  $('app').innerHTML = '<div class="loading">세계 기상 모델 예보를 불러오는 중…</div>';
+  $('banner').classList.remove('show');
+  try {
+    state.data = await fetchForecast(loc);
+    state.demo = false;
+  } catch (e) {
+    console.warn('예보 불러오기 실패, 예시 데이터 사용', e);
+    state.data = demoData(loc);
+    state.demo = true;
+    $('banner').textContent = '⚠️ 인터넷 연결 문제로 실시간 예보를 불러오지 못해 예시 데이터를 보여주고 있습니다. 연결을 확인한 뒤 다시 시도하세요.';
+    $('banner').classList.add('show');
+  }
+  const now = new Date();
+  $('locMeta').textContent = [loc.admin, loc.country, `위도 ${loc.lat.toFixed(2)}, 경도 ${loc.lon.toFixed(2)}`, `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} 업데이트`].filter(Boolean).join(' · ');
+  render();
+}
+
+async function search() {
+  const q = $('q').value.trim();
+  const box = $('results');
+  if (!q) return;
+  box.innerHTML = '<button type="button" disabled>검색 중…</button>';
+  box.classList.add('open');
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=ko&format=json`);
+    const j = await res.json();
+    const list = j.results || [];
+    if (!list.length) { box.innerHTML = '<button type="button" disabled>검색 결과가 없습니다. 영어 이름으로도 시도해 보세요.</button>'; return; }
+    box.innerHTML = list.map((r, i) => `<button type="button" data-i="${i}">${esc(r.name)} <small>${esc([r.admin1, r.country].filter(Boolean).join(', '))}</small></button>`).join('');
+    box.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => {
+      const r = list[Number(b.dataset.i)];
+      box.classList.remove('open');
+      $('q').value = '';
+      loadLocation({ name: r.name, lat: r.latitude, lon: r.longitude, country: r.country || '', admin: r.admin1 || '' });
+    }));
+  } catch (e) {
+    box.innerHTML = '<button type="button" disabled>검색에 실패했습니다. 인터넷 연결을 확인하세요.</button>';
+  }
+}
+
+function init() {
+  $('quick').innerHTML = QUICK.map((c, i) => `<button class="chip" type="button" data-q="${i}">${esc(c.name)}</button>`).join('');
+  $('quick').querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => loadLocation(QUICK[Number(b.dataset.q)])));
+  $('searchBtn').addEventListener('click', search);
+  $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); if (e.key === 'Escape') $('results').classList.remove('open'); });
+  document.addEventListener('click', e => { if (!e.target.closest('.search-row')) $('results').classList.remove('open'); });
+  $('geoBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) { alert('이 브라우저는 위치 기능을 지원하지 않습니다.'); return; }
+    $('geoBtn').disabled = true;
+    navigator.geolocation.getCurrentPosition(p => {
+      $('geoBtn').disabled = false;
+      loadLocation({ name: '현재 위치', lat: p.coords.latitude, lon: p.coords.longitude, country: '', admin: '' });
+    }, () => { $('geoBtn').disabled = false; alert('위치를 가져오지 못했습니다. 브라우저 위치 권한을 확인하세요.'); }, { timeout: 10000 });
+  });
+  $('themeBtn').addEventListener('click', () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    store.set('wc-theme', root.dataset.theme);
+    if (state.data) render();
+  });
+  const theme = store.get('wc-theme');
+  if (theme) document.documentElement.dataset.theme = theme;
+  const enabled = store.get('wc-enabled');
+  if (Array.isArray(enabled) && enabled.length) state.enabled = new Set(enabled);
+  const saved = store.get('wc-loc');
+  loadLocation(saved && isNum(saved.lat) && isNum(saved.lon) ? saved : QUICK[0]);
+}
+init();
+</script>
+</body>
+</html>
